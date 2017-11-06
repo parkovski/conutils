@@ -6,4 +6,6 @@ Use the following flags to turn VT mode on and off:
 - `i+ / i-` &rarr; Enable/disable VT input.
 - `o+ / o-` &rarr; Enable/disable VT output.
 - `a+ / a-` &rarr; Enable/disable VT input and output.
+- `i/o/a=xxxx` &rarr; Set a custom mode (in hex, 0x optional)
+- `-p pid` &rarr; Attach to process identified by `pid`.
 - `-h` &rarr; Show help.
