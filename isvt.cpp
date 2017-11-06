@@ -106,9 +106,9 @@ int main(int argc, char *argv[]) {
   GetConsoleMode(in, &inmode);
   GetConsoleMode(out, &outmode);
   bool vt = inmode & ENABLE_VIRTUAL_TERMINAL_INPUT;
-  bool outvt = inmode & ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+  bool outvt = outmode & ENABLE_VIRTUAL_TERMINAL_PROCESSING;
   printf("in: 0x%X; vt=%s\n", inmode, vt ? "on" : "off");
-  printf("out: 0x%X; vt=%s\n", inmode, outvt ? "on" : "off");
+  printf("out: 0x%X; vt=%s\n", outmode, outvt ? "on" : "off");
   if (setin == 1) {
     SetConsoleMode(in, inmode | ENABLE_VIRTUAL_TERMINAL_INPUT);
   } else if (setin == -1) {
@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
   } else if (setout == -1) {
     SetConsoleMode(out, outmode & ~ENABLE_VIRTUAL_TERMINAL_PROCESSING);
   } else if (setout & CUSTOM_MODE) {
-    SetConsoleMode(out, outmode & ~CUSTOM_MODE);
+    SetConsoleMode(out, setout & ~CUSTOM_MODE);
   }
 
   if (setin | setout) {
