@@ -1,11 +1,12 @@
-# isvt - Windows virtual terminal utility
+# isvt - Windows console mode utility
 
-A simple tool to report and change the virtual terminal mode for the current console.
-Run without arguments to see if VT/ANSI mode is enabled for console input and output.
-Use the following flags to turn VT mode on and off:
+A simple tool to report and change console modes for any accessible process.
+Run without arguments to see the mode for the current console.
+Supported arguments:
 - `i+ / i-` &rarr; Enable/disable VT input.
 - `o+ / o-` &rarr; Enable/disable VT output.
 - `a+ / a-` &rarr; Enable/disable VT input and output.
-- `i/o/a=xxxx` &rarr; Set a custom mode (in hex, 0x optional)
+- `i/o=xxxx` &rarr; Set a custom mode (hex or names, 0x optional)
 - `-p pid` &rarr; Attach to process identified by `pid`.
 - `-h` &rarr; Show help.
+- `-l` &rarr; List valid input/output names and values.

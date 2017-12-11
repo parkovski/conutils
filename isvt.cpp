@@ -4,7 +4,8 @@
 
 using std::string;
 
-static const int CUSTOM_MODE = 0x07000000;
+static const int CUSTOM_MODE = 0x05000000;
+static const int CURRENT_MODE = 0x0A000000;
 
 #ifndef ENABLE_AUTO_POSITION
 #define ENABLE_AUTO_POSITION 0x100
@@ -60,56 +61,73 @@ void print_out(DWORD mode) {
 
 #undef CM
 
-#define CM(m) if (val == #m) { if (add) mode |= m; else mode &= ~m; continue; }
+#define CM(m) if (val == #m) { \
+    if (add) mode |= invert ? ~m : m; \
+    else mask &= invert ? ~m : m; \
+    continue; \
+  }
 
 template<bool in>
-bool set_mode(const char *str, DWORD &mode) {
+bool set_mode(const char *str, DWORD &mode, DWORD &mask) {
   char c;
   bool add = true;
+  bool invert = false;
   string val;
+  mode = 0;
+  mask = (DWORD)(-1);
   while ((c = *str++) != 0) {
     if (c == ' ' || c == '\t') {
       continue;
     }
     if (c == '|' || c == '+' || c == ',') {
       add = true;
+      invert = false;
       continue;
     }
-    if (c == '-' || c == '~') {
+    if (c == '-') {
       add = false;
+      invert = true;
       continue;
     }
     if (c == '&') {
-      while (*str == ' ' || *str == '\t') {
-        str++;
-      }
-      if (*str == '~') {
-        add = false;
-        str++;
-        continue;
-      } else {
-        return false;
-      }
+      add = false;
+      invert = false;
+      continue;
+    }
+    if (c == '~') {
+      invert = true;
+      continue;
     }
 
     val.clear();
+    --str;
     while (
-         (c >= '0' && c <= '9')
-      || (c >= 'a' && c <= 'z')
-      || (c >= 'A' && c <= 'Z')
-      || c == '_'
+      (c = *str)
+      && (
+             (c >= '0' && c <= '9')
+          || (c >= 'a' && c <= 'z')
+          || (c >= 'A' && c <= 'Z')
+          || c == '_'
+      )
     )
     {
       val.push_back(c);
-      c = *str++;
+      ++str;
     }
 
     if (val.length() == 0) {
       return false;
     } else {
       DWORD hex = parse_hex(val);
-      if (val == "0") { continue; }
-      if (hex == 0) {
+      if (hex == 0 && val != "0") {
+        if (val == "_") {
+          if (invert) {
+            printf("expressions `~_', `-_' not supported\n");
+            return false;
+          }
+          mode |= CURRENT_MODE;
+          continue;
+        }
         if (in) {
           CM(ENABLE_PROCESSED_INPUT)
           CM(ENABLE_LINE_INPUT)
@@ -127,11 +145,12 @@ bool set_mode(const char *str, DWORD &mode) {
           CM(DISABLE_NEWLINE_AUTO_RETURN)
           CM(ENABLE_LVB_GRID_WORLDWIDE)
         }
+        printf("unknown option %s\n", val.c_str());
         return false;
       } else if (add) {
-        mode |= hex;
+        mode |= invert ? ~hex : hex;
       } else {
-        mode &= ~hex;
+        mask &= invert ? ~hex : hex;
       }
     }
   }
@@ -139,13 +158,17 @@ bool set_mode(const char *str, DWORD &mode) {
   return true;
 }
 
-bool set_in(const char *str, DWORD &mode) {
-  mode |= ENABLE_EXTENDED_FLAGS;
-  return set_mode<true>(str, mode);
+bool set_in(const char *str, DWORD &mode, DWORD &mask) {
+  bool ok = set_mode<true>(str, mode, mask);
+  if ((mode | ~mask) & (ENABLE_QUICK_EDIT_MODE | ENABLE_INSERT_MODE)) {
+    mode |= ENABLE_EXTENDED_FLAGS;
+    mask |= ENABLE_EXTENDED_FLAGS;
+  }
+  return ok;
 }
 
-bool set_out(const char *str, DWORD &mode) {
-  return set_mode<false>(str, mode);
+bool set_out(const char *str, DWORD &mode, DWORD &mask) {
+  return set_mode<false>(str, mode, mask);
 }
 
 #undef CM
@@ -153,6 +176,8 @@ bool set_out(const char *str, DWORD &mode) {
 int main(int argc, char *argv[]) {
   DWORD setin = 0;
   DWORD setout = 0;
+  DWORD inmask;
+  DWORD outmask;
   DWORD pid = 0;
 
   for (int i = 1; i < argc; i++) {
@@ -164,9 +189,16 @@ int main(int argc, char *argv[]) {
              "           a = all\n"
              "Mode:      + = enable vt mode\n"
              "           - = disable vt mode\n"
-             "           = = set a custom mode in hex\n"
+             "           = = set a custom mode in hex or by name(s)\n"
              "Options:   -p pid = attach to another process\n"
-             "           -l     = list valid values\n");
+             "           -l     = list valid values\n"
+             "Custom modes:\n"
+             " * Modes may be specified either using hex values (ex. 0x10) or by name.\n"
+             " * To see a list of valid names, use `isvt -l'.\n"
+             " * Modes can be combined using `+' and `-', or using `|', `&', and `~'.\n"
+             "   The `+' operator is equivalent to `|'; `-' is equivalent to `&~'.\n"
+             " * The current mode can be embedded in an expression; it is represented\n"
+             "   by the `_' placeholder value.\n");
       return 0;
     }
 
@@ -190,22 +222,25 @@ int main(int argc, char *argv[]) {
 
     if (arg[0] == '-' && arg[1] == 'l') {
       printf("Valid input modes:\n"
-             "  ENABLE_PROCESSED_INPUT\n"
-             "  ENABLE_LINE_INPUT\n"
-             "  ENABLE_ECHO_INPUT\n"
-             "  ENABLE_WINDOW_INPUT\n"
-             "  ENABLE_MOUSE_INPUT\n"
-             "  ENABLE_INSERT_MODE\n"
-             "  ENABLE_QUICK_EDIT_MODE\n"
-             "  ENABLE_VIRTUAL_TERMINAL_INPUT\n"
-             "  ENABLE_AUTO_POSITION\n"
+             "  ENABLE_PROCESSED_INPUT (0x1)\n"
+             "  ENABLE_LINE_INPUT (0x2)\n"
+             "  ENABLE_ECHO_INPUT (0x4)\n"
+             "  ENABLE_WINDOW_INPUT (0x8)\n"
+             "  ENABLE_MOUSE_INPUT (0x10)\n"
+             "  ENABLE_INSERT_MODE (0x20)\n"
+             "  ENABLE_QUICK_EDIT_MODE (0x40)\n"
+             "  ENABLE_AUTO_POSITION (0x100)\n"
+             "  ENABLE_VIRTUAL_TERMINAL_INPUT (0x200)\n"
              "\n"
              "Valid output modes:\n"
-             "  ENABLE_PROCESSED_OUTPUT\n"
-             "  ENABLE_WRAP_AT_EOL_OUTPUT\n"
-             "  ENABLE_VIRTUAL_TERMINAL_PROCESSING\n"
-             "  DISABLE_NEWLINE_AUTO_RETURN\n"
-             "  ENABLE_LVB_GRID_WORLDWIDE\n");
+             "  ENABLE_PROCESSED_OUTPUT (0x1)\n"
+             "  ENABLE_WRAP_AT_EOL_OUTPUT (0x2)\n"
+             "  ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x4)\n"
+             "  DISABLE_NEWLINE_AUTO_RETURN (0x8)\n"
+             "  ENABLE_LVB_GRID_WORLDWIDE (0x10)\n"
+             "\n"
+             "Current mode placeholder:\n"
+             "  _ (replaced with current input/output mode in an expression)\n");
       return 0;
     }
 
@@ -223,16 +258,16 @@ int main(int argc, char *argv[]) {
       else if (arg[0] == 'o') setout = -1;
       else if (arg[0] == 'a') setin = setout = -1;
     } else if (arg[1] == '=') {
-      DWORD mode = 0;
+      DWORD mode;
 
       if (arg[0] == 'i') {
-        if (!set_in(arg + 2, mode)) {
+        if (!set_in(arg + 2, mode, inmask)) {
           printf("invalid input mode %s\n", arg);
           return 1;
         }
         setin = mode | CUSTOM_MODE;
       } else if (arg[0] == 'o') {
-        if (!set_out(arg + 2, mode)) {
+        if (!set_out(arg + 2, mode, outmask)) {
           printf("invalid output mode %s\n", arg);
           return 1;
         }
@@ -265,14 +300,24 @@ int main(int argc, char *argv[]) {
   } else if (setin == -1) {
     SetConsoleMode(in, inmode & ~ENABLE_VIRTUAL_TERMINAL_INPUT);
   } else if (setin & CUSTOM_MODE) {
-    SetConsoleMode(in, setin & ~CUSTOM_MODE);
+    if (setin & CURRENT_MODE) {
+      setin |= inmode;
+    }
+    setin &= inmask & ~(CURRENT_MODE | CUSTOM_MODE);
+    SetConsoleMode(in, setin);
+    setin |= CUSTOM_MODE;
   }
   if (setout == 1) {
     SetConsoleMode(out, outmode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
   } else if (setout == -1) {
     SetConsoleMode(out, outmode & ~ENABLE_VIRTUAL_TERMINAL_PROCESSING);
   } else if (setout & CUSTOM_MODE) {
+    if (setout & CURRENT_MODE) {
+      setout |= outmode;
+    }
+    setout &= outmask & ~(CURRENT_MODE | CUSTOM_MODE);
     SetConsoleMode(out, setout & ~CUSTOM_MODE);
+    setout |= CUSTOM_MODE;
   }
 
   FreeConsole();
@@ -290,6 +335,7 @@ int main(int argc, char *argv[]) {
 
   if (setin | setout) {
     static const char *things[] = { "off", "", "on" };
+    printf("----------\n");
     if (setin == -1 || setin == 1) {
       printf("vt[in]   = %s\n", things[setin+1]);
     } else if (setin & CUSTOM_MODE) {
