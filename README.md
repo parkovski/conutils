@@ -10,3 +10,5 @@ Supported arguments:
 - `-p pid` &rarr; Attach to process identified by `pid`.
 - `-h` &rarr; Show help.
 - `-l` &rarr; List valid input/output names and values.
+
+Using the `i/o=` option, names and values can be combined - see help for details.
