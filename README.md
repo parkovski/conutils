@@ -1,4 +1,6 @@
-# isvt - Windows console mode utility
+# Windows Console Utilities
+
+## isvt - Windows console mode utility
 
 A simple tool to report and change console modes for any accessible process.
 Run without arguments to see the mode for the current console.
@@ -12,3 +14,13 @@ Supported arguments:
 - `-l` &rarr; List valid input/output names and values.
 
 Using the `i/o=` option, names and values can be combined - see help for details.
+
+## hresult - Print an hresult value.
+
+Usage: `hresult <result code>`
+
+## conevents - Print console events.
+
+Usage: `conevents [-v]`. The `-v` option sets virtual terminal input mode.
+
+Press Ctrl-C twice to exit.
