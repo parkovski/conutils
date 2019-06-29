@@ -256,7 +256,7 @@ int wmain(int argc, wchar_t *argv[]) {
       if (rec.EventType == KEY_EVENT && rec.Event.KeyEvent.bKeyDown) {
           if (rec.Event.KeyEvent.uChar.UnicodeChar == 3) {
             ++ctrlCCount;
-          } else {
+          } else if (rec.Event.KeyEvent.uChar.UnicodeChar) {
             ctrlCCount = 0;
           }
       }
