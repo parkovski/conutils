@@ -5,8 +5,17 @@
 #include <string_view>
 #include <sstream>
 
+enum EventMask {
+  EM_Keyboard     = 0x1,
+  EM_Mouse        = 0x2,
+  EM_Focus        = 0x4,
+  EM_Menu         = 0x8,
+  EM_WindowSize   = 0x10,
+};
+
 static HANDLE hStdin;
 static HANDLE hStdout;
+static unsigned eventMask;
 
 static void write(std::wstring_view str) {
   DWORD charsWritten;
@@ -53,6 +62,9 @@ static void printev(const INPUT_RECORD &rec) {
 
   switch (rec.EventType) {
   case FOCUS_EVENT:
+    if (!(eventMask & EM_Focus)) {
+      return;
+    }
     if (rec.Event.FocusEvent.bSetFocus) {
       s << L"> Focus";
     } else {
@@ -60,6 +72,9 @@ static void printev(const INPUT_RECORD &rec) {
     }
     break;
   case KEY_EVENT:
+    if (!(eventMask & EM_Keyboard)) {
+      return;
+    }
     {
       const auto &e = rec.Event.KeyEvent;
       //if (!e.bKeyDown) { return; }
@@ -85,12 +100,18 @@ static void printev(const INPUT_RECORD &rec) {
     }
     break;
   case MENU_EVENT:
+    if (!(eventMask & EM_Menu)) {
+      return;
+    }
     {
       s << L"> Menu #";
       s << rec.Event.MenuEvent.dwCommandId;
     }
     break;
   case MOUSE_EVENT:
+    if (!(eventMask & EM_Mouse)) {
+      return;
+    }
     {
       const auto &e = rec.Event.MouseEvent;
       s << L"> Mouse (" << e.dwMousePosition.X << L", " << e.dwMousePosition.Y
@@ -103,9 +124,20 @@ static void printev(const INPUT_RECORD &rec) {
     }
     break;
   case WINDOW_BUFFER_SIZE_EVENT:
+    if (!(eventMask & EM_WindowSize)) {
+      return;
+    }
     {
       const auto &e = rec.Event.WindowBufferSizeEvent;
       s << L"> BufferSize = " << e.dwSize.X << L" x " << e.dwSize.Y;
+      CONSOLE_SCREEN_BUFFER_INFO sbi;
+      GetConsoleScreenBufferInfo(hStdout, &sbi);
+      s << L"\n> ScreenBufferInfo:"
+        << L"\n    Size = " << sbi.dwSize.X << " x " << sbi.dwSize.Y
+        << L"\n    Window = [(" << sbi.srWindow.Left << L", " << sbi.srWindow.Top
+        << L"), (" << sbi.srWindow.Right << L", " << sbi.srWindow.Bottom << L")]"
+        << L"\n    MaxWindowSize = " << sbi.dwMaximumWindowSize.X << L" x "
+        << sbi.dwMaximumWindowSize.Y;
     }
     break;
   }
@@ -119,17 +151,89 @@ int wmain(int argc, wchar_t *argv[]) {
   hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
   DWORD inMode, newInMode;
   DWORD outMode;
+  enum {
+    AltBufferNone = 0,
+    AltBufferApi = 1,
+    AltBufferVt = 2,
+  };
+  int altbuffer = AltBufferNone;
 
   newInMode = ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT | ENABLE_EXTENDED_FLAGS;
 
-  if (argc >= 2 && argv[1][0] == '-' && argv[1][1] == 'v' && argv[1][2] == 0) {
-    newInMode |= ENABLE_VIRTUAL_TERMINAL_INPUT;
+  eventMask = EM_Keyboard | EM_WindowSize;
+
+  for (int i = 1; i < argc; ++i) {
+    std::wstring_view arg = argv[i];
+    if (arg == L"-v") {
+      newInMode |= ENABLE_VIRTUAL_TERMINAL_INPUT;
+    } else if (arg == L"-ba") {
+      altbuffer = AltBufferApi;
+    } else if (arg == L"-bv") {
+      altbuffer = AltBufferVt;
+    } else if (arg[0] == '-' && arg[1] == 'e') {
+      eventMask = 0;
+      for (int i = 2; i < arg.length(); ++i) {
+        switch (arg[i]) {
+          case 'f':
+            eventMask |= EM_Focus;
+            break;
+          case 'k':
+            eventMask |= EM_Keyboard;
+            break;
+          case 'm':
+            eventMask |= EM_Mouse;
+            break;
+          case 'u':
+            eventMask |= EM_Menu;
+            break;
+          case 's':
+            eventMask |= EM_WindowSize;
+            break;
+          default:
+            wchar_t e[2] = { arg[i], 0 };
+            write(L"Unknown event type '");
+            write(e);
+            write(L"'\n");
+            return 1;
+        }
+      }
+    } else if (arg == L"-h") {
+      write(L"Args:\n"
+            L"  -v        = virtual terminal input\n"
+            L"  -ba       = alt buffer through console API\n"
+            L"  -bv       = alt buffer through VT\n"
+            L"  -e[fkmus] = Enable event types (focus, key, mouse, menu, size)\n"
+            L"              Default is keyboard and window size events\n"
+            L"  -h        = help\n");
+      return 0;
+    } else {
+      write(L"Unknown arg '");
+      write(arg);
+      write(L"'.\n");
+      return 1;
+    }
+  }
+
+  GetConsoleMode(hStdout, &outMode);
+
+  if (altbuffer == AltBufferApi) {
+    hStdout = CreateConsoleScreenBuffer(
+      GENERIC_READ | GENERIC_WRITE,
+      FILE_SHARE_READ | FILE_SHARE_WRITE,
+      nullptr,
+      CONSOLE_TEXTMODE_BUFFER,
+      nullptr
+    );
+    if (!hStdout) {
+      write(L"Creating screen buffer failed!");
+    }
+    SetConsoleActiveScreenBuffer(hStdout);
+  } else if (altbuffer == AltBufferVt) {
+    write(L"\x1b[?1049h");
   }
 
   GetConsoleMode(hStdin, &inMode);
   SetConsoleMode(hStdin, newInMode);
-
-  GetConsoleMode(hStdout, &outMode);
   SetConsoleMode(hStdout, ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 
   write(L"Press ^C twice to exit.\n\n");
@@ -158,6 +262,13 @@ int wmain(int argc, wchar_t *argv[]) {
       }
       --evCount;
     }
+  }
+
+  if (altbuffer == AltBufferApi) {
+    CloseHandle(hStdout);
+    hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
+  } else if (altbuffer == AltBufferVt) {
+    write(L"\x1b[?1049l");
   }
 
   SetConsoleMode(hStdin, inMode);
