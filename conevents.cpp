@@ -170,6 +170,7 @@ int wmain(int argc, wchar_t *argv[]) {
       altbuffer = AltBufferApi;
     } else if (arg == L"-bv") {
       altbuffer = AltBufferVt;
+      newInMode |= ENABLE_VIRTUAL_TERMINAL_INPUT;
     } else if (arg[0] == '-' && arg[1] == 'e') {
       eventMask = 0;
       for (int i = 2; i < arg.length(); ++i) {
@@ -200,8 +201,8 @@ int wmain(int argc, wchar_t *argv[]) {
     } else if (arg == L"-h") {
       write(L"Args:\n"
             L"  -v        = virtual terminal input\n"
+            L"  -bv       = alt buffer through VT, implies -v.\n"
             L"  -ba       = alt buffer through console API\n"
-            L"  -bv       = alt buffer through VT\n"
             L"  -e[fkmus] = Enable event types (focus, key, mouse, menu, size)\n"
             L"              Default is keyboard and window size events\n"
             L"  -h        = help\n");
