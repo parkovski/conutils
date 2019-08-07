@@ -1,1 +1,4 @@
 *.exe
+*.obj
+*.pdb
+compile_commands.json
