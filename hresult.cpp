@@ -13,8 +13,9 @@
 
 int main(int argc, char *argv[]) {
   if (argc < 2) {
-    std::cerr << "Usage: hresult [nt] <number>.\n";
-    std::cerr << "The nt option interprets NTSTATUS values.\n";
+    std::cerr << "Usage: hresult [-w] <error-code>.\n";
+    std::cerr << "By default interprets error-code as NTSTATUS.\n";
+    std::cerr << "Pass -w to interpret error-code as HRESULT (DOS error).\n";
     std::cerr << "Numbers can be in decimal or hex (0x...) format.\n";
     return 1;
   }
@@ -22,11 +23,11 @@ int main(int argc, char *argv[]) {
   constexpr int cvt_none = 0;
   constexpr int cvt_nt = 1;
 
-  int convert = cvt_none;
-  if (!_strcmpi(argv[1], "nt")) {
-    convert = cvt_nt;
+  int convert = cvt_nt;
+  if (!_strcmpi(argv[1], "-w")) {
     REQUIRE_ARGS(2)
   } else {
+    convert = cvt_none;
     REQUIRE_ARGS(1)
   }
 
@@ -47,7 +48,7 @@ int main(int argc, char *argv[]) {
       messageId = reinterpret_cast<ULONG (*)(NTSTATUS)>(
           GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlNtStatusToDosError")
         )(messageId);
-      std::cout << "Converted from NTSTATUS = 0x" << std::hex << std::uppercase
+      std::cout << "NTSTATUS -> HRESULT = 0x" << std::hex << std::uppercase
         << messageId << std::dec << std::nouppercase << " (" << messageId << ")\n";
       break;
     default:
