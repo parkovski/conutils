@@ -28,7 +28,7 @@ DWORD parse_hex(string &s) {
     } else {
       return 0;
     }
-    hex = (hex << 1) | d;
+    hex = (hex << 4) | d;
   }
   return hex;
 }
@@ -136,6 +136,7 @@ bool set_mode(const char *str, DWORD &mode, DWORD &mask) {
           CM(ENABLE_MOUSE_INPUT)
           CM(ENABLE_INSERT_MODE)
           CM(ENABLE_QUICK_EDIT_MODE)
+          CM(ENABLE_EXTENDED_FLAGS)
           CM(ENABLE_VIRTUAL_TERMINAL_INPUT)
           CM(ENABLE_AUTO_POSITION)
         } else {
@@ -222,25 +223,28 @@ int main(int argc, char *argv[]) {
 
     if (arg[0] == '-' && arg[1] == 'l') {
       printf("Valid input modes:\n"
-             "  ENABLE_PROCESSED_INPUT (0x1)\n"
-             "  ENABLE_LINE_INPUT (0x2)\n"
-             "  ENABLE_ECHO_INPUT (0x4)\n"
-             "  ENABLE_WINDOW_INPUT (0x8)\n"
-             "  ENABLE_MOUSE_INPUT (0x10)\n"
-             "  ENABLE_INSERT_MODE (0x20)\n"
-             "  ENABLE_QUICK_EDIT_MODE (0x40)\n"
-             "  ENABLE_AUTO_POSITION (0x100)\n"
+             "  ENABLE_PROCESSED_INPUT        (0x1)\n"
+             "  ENABLE_LINE_INPUT             (0x2)\n"
+             "  ENABLE_ECHO_INPUT             (0x4)\n"
+             "  ENABLE_WINDOW_INPUT           (0x8)\n"
+             "  ENABLE_MOUSE_INPUT            (0x10)\n"
+             "  ENABLE_INSERT_MODE            (0x20)\n"
+             "  ENABLE_QUICK_EDIT_MODE        (0x40)\n"
+             "  ENABLE_EXTENDED_FLAGS        *(0x80)\n"
+             "  ENABLE_AUTO_POSITION         *(0x100)\n"
              "  ENABLE_VIRTUAL_TERMINAL_INPUT (0x200)\n"
              "\n"
              "Valid output modes:\n"
-             "  ENABLE_PROCESSED_OUTPUT (0x1)\n"
-             "  ENABLE_WRAP_AT_EOL_OUTPUT (0x2)\n"
+             "  ENABLE_PROCESSED_OUTPUT            (0x1)\n"
+             "  ENABLE_WRAP_AT_EOL_OUTPUT          (0x2)\n"
              "  ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x4)\n"
-             "  DISABLE_NEWLINE_AUTO_RETURN (0x8)\n"
-             "  ENABLE_LVB_GRID_WORLDWIDE (0x10)\n"
+             "  DISABLE_NEWLINE_AUTO_RETURN        (0x8)\n"
+             "  ENABLE_LVB_GRID_WORLDWIDE          (0x10)\n"
              "\n"
              "Current mode placeholder:\n"
-             "  _ (replaced with current input/output mode in an expression)\n");
+             "  _ (replaced with current input/output mode in an expression)\n"
+             "\n"
+             "* These flags are added automatically or not usually necessary.\n");
       return 0;
     }
 
