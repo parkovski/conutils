@@ -5,9 +5,15 @@ param(
 
 if (-not $files.Length) {
   $files = Get-ChildItem .\*.cpp
+} else {
+  for ($i = 0; $i -lt $files.Length; $i += 1) {
+    if (!$files[$i].EndsWith('.cpp')) {
+      $files[$i] += '.cpp'
+    }
+  }
 }
 
 foreach ($file in $files) {
-  cl.exe /nologo /EHsc /std:c++17 $file
+  cl.exe /nologo /EHsc /std:c++17 /O1 /MD /DNDEBUG /GF /GR- /GL $file
 }
 rm .\*.obj
