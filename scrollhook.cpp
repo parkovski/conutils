@@ -45,9 +45,9 @@ ScopeExit<F> scope_exit(F f) {
 }
 
 void inputThread() {
+  std::unique_lock<std::mutex> lock{*mutex};
   if (verbose) printf("Input queue started.\n");
   while (true) {
-    std::unique_lock<std::mutex> lock{*mutex};
     cond->wait(lock);
     if (inputQueue->empty()) {
       if (verbose) printf("Input queue will shut down.\n");
@@ -55,12 +55,16 @@ void inputThread() {
       cond->notify_one();
       return;
     }
-    while (!inputQueue->empty()) {
-      auto &input = inputQueue->back();
+    int count = 0;
+    do {
+      auto &input = inputQueue->front();
+      lock.unlock();
       SendInput(1, &input, sizeof(INPUT));
+      ++count;
+      lock.lock();
       inputQueue->pop();
-      if (verbose) printf("Input queue processed 1 event.\n");
-    }
+    } while (!inputQueue->empty());
+    if (verbose) printf("Input queue processed %d event(s).\n", count);
   }
 }
 
@@ -209,8 +213,6 @@ int wmain(int argc, wchar_t *argv[]) {
   mutex = new std::mutex();
   cond = new std::condition_variable();
 
-  std::thread inputQueueThread{&inputThread};
-
   if (!(hkKeybd = SetWindowsHookEx(WH_KEYBOARD_LL, &KeybdLL, hMod, 0))) {
     return GetLastError();
   }
@@ -218,6 +220,8 @@ int wmain(int argc, wchar_t *argv[]) {
     return GetLastError();
   }
   if (verbose) printf("Hooks registered for scan code 0x%lX.\n", targetScanCode);
+
+  std::thread inputQueueThread{&inputThread};
 
   auto iqfree = scope_exit([&]() {
     if (verbose) printf("Begin input queue shutdown.\n");
