@@ -15,11 +15,15 @@
 
 const DWORD defaultScanCode = 0x56;
 const char *const defaultName = "ISO extra '\\'";
+const DWORD defaultPrecisionScanCode = 0x3B; // F1
+const DWORD defaultHorizPrecisionScanCode = 0x3C; // F2
 
 DWORD mainThreadId;
 HHOOK hkKeybd = nullptr;
 HHOOK hkMouse = nullptr;
 bool swapMouseScroll = false;
+bool precisionMode = false;
+bool horizPrecisionMode = false;
 std::queue<INPUT, std::list<INPUT>> *inputQueue;
 std::mutex *mutex;
 std::condition_variable *cond;
@@ -30,6 +34,8 @@ bool verbose = false;
 bool showKeyCodes = false;
 bool swapScrollDirection = false;
 DWORD targetScanCode = defaultScanCode;
+DWORD precisionScanCode = defaultPrecisionScanCode;
+DWORD horizPrecisionScanCode = defaultHorizPrecisionScanCode;
 
 template<class F>
 struct ScopeExit {
@@ -83,10 +89,33 @@ LRESULT CALLBACK KeybdLL(int nCode, WPARAM wParam, LPARAM lParam) {
       }
       if (info.scanCode == targetScanCode) {
         if (!swapMouseScroll) {
-          if (verbose) printf("Intercepted toggle key down.\n");
+          if (verbose) printf("Toggle key down.\n");
           swapMouseScroll = true;
+          precisionMode = false;
+          horizPrecisionMode = false;
         }
         return true;
+      } else if (info.scanCode == precisionScanCode) {
+        if (!swapMouseScroll) {
+          // If swapMouseScroll is false, this variable means "do we need to
+          // eat the key up message" - aka was the key pressed while
+          // swapMouseScroll was active.
+          precisionMode = false;
+        } else if (!precisionMode) {
+          if (verbose) printf("Switching to precision mode.\n");
+          precisionMode = true;
+          horizPrecisionMode = false;
+          return true;
+        }
+      } else if (info.scanCode == horizPrecisionScanCode) {
+        if (!swapMouseScroll) {
+          horizPrecisionMode = false;
+        } else if (!horizPrecisionMode) {
+          if (verbose) printf("Switching to horizontal precision mode.\n");
+          horizPrecisionMode = true;
+          precisionMode = false;
+          return true;
+        }
       }
       break;
 
@@ -96,8 +125,21 @@ LRESULT CALLBACK KeybdLL(int nCode, WPARAM wParam, LPARAM lParam) {
         break;
       }
       if (info.scanCode == targetScanCode) {
-        if (verbose) printf("Intercepted toggle key up.\n");
+        if (verbose) printf("Toggle key up.\n");
         swapMouseScroll = false;
+        return true;
+      } else if (info.scanCode == precisionScanCode && precisionMode) {
+        if (verbose) printf("Ate precision mode key up.\n");
+        if (!swapMouseScroll) {
+          // Eat the first key up message but pass later ones on.
+          precisionMode = false;
+        }
+        return true;
+      } else if (info.scanCode == horizPrecisionScanCode && horizPrecisionMode) {
+        if (verbose) printf("Ate horizontal precision mode key up.\n");
+        if (!swapMouseScroll) {
+          horizPrecisionMode = false;
+        }
         return true;
       }
       break;
@@ -121,14 +163,23 @@ LRESULT CALLBACK MouseLL(int nCode, WPARAM wParam, LPARAM lParam) {
         input.type = INPUT_MOUSE;
         input.mi.dx = info.pt.x;
         input.mi.dy = info.pt.y;
-        if (swapScrollDirection) {
-          input.mi.mouseData = (DWORD)((long)info.mouseData >> 16);
-        } else {
-          input.mi.mouseData = (DWORD)(-((long)info.mouseData >> 16));
-        }
-        input.mi.dwFlags = MOUSEEVENTF_HWHEEL | MOUSEEVENTF_ABSOLUTE;
         input.mi.time = info.time;
         input.mi.dwExtraInfo = 0;
+        if (precisionMode) {
+          if ((long)info.mouseData > 0) {
+            input.mi.mouseData = 40;
+          } else {
+            input.mi.mouseData = (DWORD)-40;
+          }
+          input.mi.dwFlags = MOUSEEVENTF_WHEEL | MOUSEEVENTF_ABSOLUTE;
+        } else {
+          if (swapScrollDirection) {
+            input.mi.mouseData = (DWORD)((long)info.mouseData >> 16);
+          } else {
+            input.mi.mouseData = (DWORD)(-((long)info.mouseData >> 16));
+          }
+          input.mi.dwFlags = MOUSEEVENTF_HWHEEL | MOUSEEVENTF_ABSOLUTE;
+        }
         {
           std::lock_guard<std::mutex> guard{*mutex};
           inputQueue->emplace(input);
@@ -219,7 +270,8 @@ int wmain(int argc, wchar_t *argv[]) {
   if (!(hkMouse = SetWindowsHookEx(WH_MOUSE_LL,    &MouseLL, hMod, 0))) {
     return GetLastError();
   }
-  if (verbose) printf("Hooks registered for scan code 0x%lX.\n", targetScanCode);
+  if (verbose) printf("Hooks registered for scan code 0x%lX, precision code 0x%lX, horizontal precision code 0x%lX.\n",
+                      targetScanCode, precisionScanCode, horizPrecisionScanCode);
 
   std::thread inputQueueThread{&inputThread};
 
