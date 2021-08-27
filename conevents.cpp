@@ -81,7 +81,7 @@ static void printev(const INPUT_RECORD &rec) {
     {
       const auto &e = rec.Event.KeyEvent;
       auto uchar = (unsigned short)e.uChar.UnicodeChar;
-      if (eventMask & EM_Keyboard) {
+      if (!(eventMask & (EM_Char | EM_Hex))) {
         s << L"> Key" << (e.bKeyDown ? L" down" : L" up");
         s << L"\r\n  Unicode = 0x" << std::hex << std::uppercase << std::setfill(L'0');
         if (uchar & 0xFF00) {
@@ -93,7 +93,7 @@ static void printev(const INPUT_RECORD &rec) {
       } else if (!e.bKeyDown) {
         return;
       }
-      if (eventMask == EM_Hex) {
+      if (eventMask & EM_Hex) {
         s << std::hex << std::setfill(L'0') << std::setw(2);
         if (uchar & 0xFF00) {
           s << (uchar >> 8) << std::setw(0) << L'_' << std::setw(2);
@@ -110,7 +110,7 @@ static void printev(const INPUT_RECORD &rec) {
       } else {
         s << e.uChar.UnicodeChar;
       }
-      if (eventMask == EM_Char) {
+      if (eventMask & EM_Char) {
         write(s.str());
         return;
       }
@@ -173,6 +173,9 @@ static void printev(const INPUT_RECORD &rec) {
 }
 
 int wmain(int argc, wchar_t *argv[]) {
+  SetConsoleCP(CP_UTF8);
+  SetConsoleOutputCP(CP_UTF8);
+
   hStdin = GetStdHandle(STD_INPUT_HANDLE);
   hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
   DWORD inMode, newInMode;
@@ -202,7 +205,7 @@ int wmain(int argc, wchar_t *argv[]) {
       useReadFile = true;
     } else if (arg == L"-rc") {
       useReadConsole = true;
-    } else if (arg[0] == '-' && arg[1] == 'e') {
+    } else if (arg[0] == '-' && arg[1] == 'e' && arg.length() > 2) {
       eventMask = 0;
       for (int i = 2; i < arg.length(); ++i) {
         switch (arg[i]) {
@@ -232,24 +235,47 @@ int wmain(int argc, wchar_t *argv[]) {
             write(L"Unknown event type '");
             write(e);
             write(L"'\r\n");
-            return 1;
+            return ERROR_INVALID_PARAMETER;
         }
       }
-      if ((eventMask & EM_Char) && eventMask != EM_Char) {
-        write(L"-ec not valid with other -e options.\r\n");
-        return 1;
+      if ((eventMask & EM_Char) && (eventMask & ~EM_Keyboard) != EM_Char) {
+        write(L"-ec not valid with other -e options except -ek.\r\n");
+        return ERROR_INVALID_PARAMETER;
       }
-      if ((eventMask & EM_Hex) && eventMask != EM_Hex) {
-        write(L"-ex not valid with other -e options.\r\n");
-        return 1;
+      if ((eventMask & EM_Hex) && (eventMask & ~EM_Keyboard) != EM_Hex) {
+        write(L"-ex not valid with other -e options except -ek.\r\n");
+        return ERROR_INVALID_PARAMETER;
       }
       if ((useReadFile || useReadConsole) && (eventMask & ~(EM_Hex | EM_Char))) {
         write(L"-r* only valid with -ec and -ex.\r\n");
-        return 1;
+        return ERROR_INVALID_PARAMETER;
       }
       if (useReadFile && useReadConsole) {
         write(L"only one of -rf and -rc can be used.\r\n");
-        return 1;
+        return ERROR_INVALID_PARAMETER;
+      }
+    } else if (arg[0] == L'-' && arg[1] == L'm' && arg.length() > 2) {
+      for (int i = 2; i < arg.length(); i++) {
+        switch (arg[i]) {
+          case 'q':
+            newInMode |= ENABLE_QUICK_EDIT_MODE;
+            break;
+          case 'i':
+            newInMode |= ENABLE_INSERT_MODE;
+            break;
+          case 'l':
+            newInMode |= ENABLE_LINE_INPUT;
+            break;
+          case 'p':
+            newInMode |= ENABLE_PROCESSED_INPUT;
+            break;
+          default:
+            wchar_t e[2] = { arg[i], 0 };
+            write(L"Unknown mode '");
+            write(e);
+            write(L"'\r\n");
+            return ERROR_INVALID_PARAMETER;
+        }
       }
     } else if (arg == L"-h") {
       write(L"Args:\r\n"
@@ -259,7 +285,8 @@ int wmain(int argc, wchar_t *argv[]) {
             L"  -bv       = alt buffer through VT\r\n"
             L"  -ba       = alt buffer through console API\r\n"
             L"  -e[fkmus] = Enable event types (focus, key, mouse, menu, size)\r\n"
-            L"              Default is keyboard and window size events\r\n\n"
+            L"              Default is keyboard and window size events\r\n"
+            L"  -m[qilp]  = Set input modes (quick edit, insert, line input, processed input)\r\n\n"
 
             L"              The following options cannot be combined with other -e options:\r\n"
             L"  -ec       = Just print characters\r\n"
@@ -271,7 +298,7 @@ int wmain(int argc, wchar_t *argv[]) {
       write(L"Unknown arg '");
       write(arg);
       write(L"'.\r\n");
-      return 1;
+      return ERROR_INVALID_PARAMETER;
     }
   }
   if (!eventMask) {
@@ -283,8 +310,6 @@ int wmain(int argc, wchar_t *argv[]) {
   }
 
   GetConsoleMode(hStdout, &outMode);
-  SetConsoleMode(hStdout, ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT |
-                          ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN);
 
   HANDLE hOldStdout = nullptr;
   if (altbuffer == AltBufferApi) {
@@ -298,9 +323,8 @@ int wmain(int argc, wchar_t *argv[]) {
     );
     if (!hStdout) {
       write(L"Creating screen buffer failed!");
+      return GetLastError();
     }
-    SetConsoleMode(hStdout, ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT |
-                            ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN);
     SetConsoleActiveScreenBuffer(hStdout);
   } else if (altbuffer == AltBufferVt) {
     write(L"\x1b[?1049h");
@@ -319,36 +343,52 @@ int wmain(int argc, wchar_t *argv[]) {
       newInMode |= ENABLE_MOUSE_INPUT;
     }
   }
+
   SetConsoleMode(hStdin, newInMode);
+  SetConsoleMode(hStdout, ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT |
+                          ENABLE_VIRTUAL_TERMINAL_PROCESSING |
+                          DISABLE_NEWLINE_AUTO_RETURN);
 
-  SetConsoleCP(CP_UTF8);
-  SetConsoleOutputCP(CP_UTF8);
-
-  write(L"Press ^C twice to exit.\r\n\n");
+  if (newInMode & ENABLE_PROCESSED_INPUT) {
+    SetConsoleCtrlHandler(nullptr, false);
+    write(L"Press ^C to exit.\r\n\n");
+  } else {
+    write(L"Press ^C twice to exit.\r\n\n");
+  }
 
   int ctrlCCount = 0;
   if (useReadFile || useReadConsole) {
-    char buf[64];
-    DWORD nbytes;
+    union {
+      char buf[64];
+      wchar_t ubuf[32];
+    };
+    DWORD nchars;
     INPUT_RECORD rec{};
     while (true) {
       if (useReadConsole) {
         CONSOLE_READCONSOLE_CONTROL inpctl{};
-        if (!ReadConsoleA(hStdin, buf, sizeof(buf), &nbytes, &inpctl)) {
+        if (!ReadConsoleW(hStdin, ubuf, sizeof(ubuf), &nchars, &inpctl)) {
+          write(L"\r\nReadConsole failed.\r\n");
           return GetLastError();
         }
       } else {
-        if (!ReadFile(hStdin, buf, sizeof(buf), &nbytes, nullptr)) {
+        if (!ReadFile(hStdin, buf, sizeof(buf), &nchars, nullptr)) {
+          write(L"\r\nReadFile failed.\r\n");
           return GetLastError();
         }
       }
-      if (!nbytes) {
+      if (!nchars) {
         continue;
       }
-      for (DWORD i = 0; i < nbytes; ++i) {
-        char c = buf[i];
+      for (DWORD i = 0; i < nchars; ++i) {
+        wchar_t c;
+        if (useReadConsole) {
+          c = ubuf[i];
+        } else {
+          c = buf[i];
+        }
         rec.EventType = KEY_EVENT;
-        rec.Event.KeyEvent.uChar.UnicodeChar = (WCHAR)c;
+        rec.Event.KeyEvent.uChar.UnicodeChar = c;
         rec.Event.KeyEvent.bKeyDown = true;
         printev(rec);
         if (c == 3) {
