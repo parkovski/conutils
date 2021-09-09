@@ -128,7 +128,7 @@ bool set_mode(const char *str, DWORD &mode, DWORD &mask) {
           mode |= CURRENT_MODE;
           continue;
         }
-        if (in) {
+        if constexpr (in) {
           CM(ENABLE_PROCESSED_INPUT)
           CM(ENABLE_LINE_INPUT)
           CM(ENABLE_ECHO_INPUT)
@@ -191,6 +191,7 @@ int main(int argc, char *argv[]) {
              "Mode:      + = enable vt mode\n"
              "           - = disable vt mode\n"
              "           = = set a custom mode in hex or by name(s)\n"
+             "          += = add to the current mode\n"
              "Options:   -p pid = attach to another process\n"
              "           -l     = list valid values\n"
              "Custom modes:\n"
@@ -203,21 +204,25 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 
-    if (arg[0] == '-' && arg[1] == 'p' && arg[2] == 0) {
-      if (i + 1 >= argc) {
+    if (arg[0] == '-' && arg[1] == 'p') {
+      if (arg[2] == 0 && i + 1 >= argc) {
         printf("need pid\n");
         return 1;
       }
       int j = 0;
-      while (argv[i+1][j] >= '0' && argv[i+1][j] <= '9') {
-        pid = pid * 10 + (argv[i+1][j] - '0');
+      if (arg[2]) {
+        j = 2;
+      } else {
+        ++i;
+      }
+      while (argv[i][j] >= '0' && argv[i][j] <= '9') {
+        pid = pid * 10 + (argv[i][j] - '0');
         j++;
       }
-      if (j == 0) {
-        printf("%s is not a pid\n", argv[i+1]);
+      if (argv[i][j]) {
+        printf("%s is not a pid\n", argv[i]);
         return 1;
       }
-      i++;
       continue;
     }
 
@@ -248,19 +253,49 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 
-    if (arg[0] == 0 || arg[1] == 0 || (arg[1] != '=' && arg[2] != 0)) {
-      printf("ignoring unknown option %s\n", arg);
+    if (arg[0] == 0) {
       continue;
     }
 
     if (arg[1] == '+') {
-      if (arg[0] == 'i') setin = 1;
+      if (arg[2] == '=') {
+        if (arg[0] == 'i') {
+          DWORD mode;
+          if (!set_in(arg + 3, mode, inmask)) {
+            printf("invalid input mode %s\n", arg);
+            return 1;
+          }
+          setin = mode | CUSTOM_MODE | CURRENT_MODE;
+        } else if (arg[0] == 'o') {
+          DWORD mode;
+          if (!set_out(arg + 3, mode, outmask)) {
+            printf("invalid output mode %s\n", arg);
+            return 1;
+          }
+          setout = mode | CUSTOM_MODE | CURRENT_MODE;
+        } else {
+          printf("invalid operation %c+=...\n", arg[0]);
+          return 1;
+        }
+      } else if (arg[2] != 0) {
+        printf("invalid argument %s\n", arg);
+        return 1;
+      }
+      else if (arg[0] == 'i') setin = 1;
       else if (arg[0] == 'o') setout = 1;
       else if (arg[0] == 'a') setin = setout = 1;
-    } else if (arg[1] == '-') {
+      else {
+        printf("invalid operation %c+\n", arg[0]);
+        return 1;
+      }
+    } else if (arg[1] == '-' && arg[2] == 0) {
       if (arg[0] == 'i') setin = -1;
       else if (arg[0] == 'o') setout = -1;
       else if (arg[0] == 'a') setin = setout = -1;
+      else {
+        printf("invalid operation %c-\n", arg[0]);
+        return 1;
+      }
     } else if (arg[1] == '=') {
       DWORD mode;
 
@@ -280,6 +315,9 @@ int main(int argc, char *argv[]) {
         printf("what does '%c' mean?\n", arg[0]);
         return 1;
       }
+    } else {
+      printf("invalid argument %s\n", arg);
+      return 1;
     }
   }
 
@@ -328,12 +366,12 @@ int main(int argc, char *argv[]) {
   AttachConsole(ATTACH_PARENT_PROCESS);
 
   if (pid) {
-    printf("Attached to process %u.\n", pid);
+    printf("Attached to process %lu.\n", pid);
   }
-  printf("cur[in]  = 0x%X\n", inmode);
+  printf("cur[in]  = 0x%lX\n", inmode);
   printf("         = ");
   print_in(inmode);
-  printf("cur[out] = 0x%X\n", outmode);
+  printf("cur[out] = 0x%lX\n", outmode);
   printf("         = ");
   print_out(outmode);
 
@@ -344,7 +382,7 @@ int main(int argc, char *argv[]) {
       printf("vt[in]   = %s\n", things[setin+1]);
     } else if (setin & CUSTOM_MODE) {
       setin &= ~CUSTOM_MODE;
-      printf("new[in]  = 0x%X\n", setin);
+      printf("new[in]  = 0x%lX\n", setin);
       printf("         = ");
       print_in(setin);
     }
@@ -352,7 +390,7 @@ int main(int argc, char *argv[]) {
       printf("vt[out]  = %s\n", things[setout+1]);
     } else if (setout & CUSTOM_MODE) {
       setout &= ~CUSTOM_MODE;
-      printf("new[out] = 0x%X\n", setout);
+      printf("new[out] = 0x%lX\n", setout);
       printf("         = ");
       print_out(setout);
     }
