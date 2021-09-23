@@ -54,6 +54,15 @@ The `-d` option inverts the horizontal scroll direction.
 
 See `-h` for debug options.
 
+## istty - Are the program's streams terminal devices?
+
+Usage: `istty -[p][ioe]`
+
+Using `-p` causes `y`/`n` to be printed, otherwise the program returns 0 for
+yes and 1 for no.
+
+Also builds on Unix platforms.
+
 ## Scripts
 
 - `mkccmds.js` Run with node.js to generate `compile_commands.json`.
