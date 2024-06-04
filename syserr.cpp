@@ -29,8 +29,12 @@ int main(int argc, char *argv[]) {
   }
   ss >> messageId;
 
+#ifdef _WIN32
   std::cout << "Code 0x" << std::hex << std::uppercase << messageId
     << std::dec << std::nouppercase << " (" << messageId << ")\n";
+#else
+  std::cout << "Code " << messageId << "\n";
+#endif
 
 #ifdef _WIN32
   auto fromNt = reinterpret_cast<ULONG (*)(NTSTATUS)>(
@@ -69,13 +73,31 @@ int main(int argc, char *argv[]) {
 #else
 #if __linux__
   auto errname = strerrorname_np(messageId);
-  if (!errname) {
+  if (errname) {
+    std::cout << errname << ": " << strerror(messageId) << "\n";
+  } else {
     std::cout << "Not found.\n";
-    return EINVAL;
   }
-  std::cout << errname << ": ";
-#endif
+#else
   std::cout << strerror(messageId) << "\n";
+#endif
+
+  int altMessageId = -1;
+  if (messageId > 0x7f) {
+    altMessageId = -(int8_t)(messageId);
+  }
+  if (altMessageId != -1) {
+#if __linux__
+    auto alterrname = strerrorname_np(altMessageId);
+    if (alterrname) {
+      std::cout << "\nAlternate code (-errno): " << altMessageId << "\n"
+                << alterrname << ": " << strerror(altMessageId) << "\n";
+    }
+#else
+    std::cout << "\nAlternate code (-errno): " << altMessageId << "\n"
+              << strerror(altMessageId) << "\n";
+#endif
+  }
 #endif
 
   return 0;
