@@ -28,6 +28,6 @@ foreach ($file in $files) {
       }
     }
   }
-  cl.exe /nologo /EHsc /std:c++latest /O1 /MD /DNDEBUG /GF /GR- /GL $file
+  cl.exe /nologo /EHsc /std:c++20 /O1 /MD /DNDEBUG /GF /GR- /GL $file
   Remove-Item ($file -replace '\.cpp$','.obj')
 }
