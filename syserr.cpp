@@ -32,6 +32,10 @@ int main(int argc, char *argv[]) {
 #ifdef _WIN32
   std::cout << "Code 0x" << std::hex << std::uppercase << messageId
     << std::dec << std::nouppercase << " (" << messageId << ")\n";
+  if (messageId < 0x8000) {
+    std::cout << "HRESULT_FROM_WIN32 = 0x" << std::hex << std::uppercase
+      << HRESULT_FROM_WIN32(messageId) << std::dec << std::nouppercase << "\n";
+  }
 #else
   std::cout << "Code " << messageId << "\n";
 #endif
@@ -65,7 +69,7 @@ int main(int argc, char *argv[]) {
 
   if (!len) {
     auto err = GetLastError();
-    std::cout << "Not found.\n";
+    std::cout << "Error code not found.\n";
     return err;
   }
 
