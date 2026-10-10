@@ -10,7 +10,11 @@
 #include <sstream>
 
 int main(int argc, char *argv[]) {
-  if (argc != 2 || (argv[1][0] < '0' || argv[1][0] > '9')) {
+  if (argc != 2 || ((argv[1][0] < '0' || argv[1][0] > '9')
+#ifdef _WIN32
+      && argv[1][0] != '-'
+#endif
+      )) {
     std::cerr << "Usage: syserr <error-code>.\n";
     std::cerr << "Numbers can be in decimal or hex (0x...) format.\n";
     return 1;
