@@ -285,7 +285,7 @@ int wmain(int argc, wchar_t *argv[]) {
             L"  -bv       = alt buffer through VT\r\n"
             L"  -ba       = alt buffer through console API\r\n"
             L"  -e[fkmus] = Enable event types (focus, key, mouse, menu, size)\r\n"
-            L"              Default is keyboard and window size events\r\n"
+            L"              Default is keyboard and window size events (-eks)\r\n"
             L"  -m[qilp]  = Set input modes (quick edit, insert, line input, processed input)\r\n\n"
 
             L"              The following options cannot be combined with other -e options:\r\n"
@@ -310,26 +310,6 @@ int wmain(int argc, wchar_t *argv[]) {
   }
 
   GetConsoleMode(hStdout, &outMode);
-
-  HANDLE hOldStdout = nullptr;
-  if (altbuffer == AltBufferApi) {
-    hOldStdout = hStdout;
-    hStdout = CreateConsoleScreenBuffer(
-      GENERIC_READ | GENERIC_WRITE,
-      FILE_SHARE_READ | FILE_SHARE_WRITE,
-      nullptr,
-      CONSOLE_TEXTMODE_BUFFER,
-      nullptr
-    );
-    if (!hStdout) {
-      write(L"Creating screen buffer failed!");
-      return GetLastError();
-    }
-    SetConsoleActiveScreenBuffer(hStdout);
-  } else if (altbuffer == AltBufferVt) {
-    write(L"\x1b[?1049h");
-  }
-
   GetConsoleMode(hStdin, &inMode);
   if (eventMask & EM_Mouse) {
     newInMode |= ENABLE_MOUSE_INPUT;
@@ -348,6 +328,30 @@ int wmain(int argc, wchar_t *argv[]) {
   SetConsoleMode(hStdout, ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT |
                           ENABLE_VIRTUAL_TERMINAL_PROCESSING |
                           DISABLE_NEWLINE_AUTO_RETURN);
+
+
+  HANDLE hOldStdout = nullptr;
+  if (altbuffer == AltBufferApi) {
+    hOldStdout = hStdout;
+    hStdout = CreateConsoleScreenBuffer(
+      GENERIC_READ | GENERIC_WRITE,
+      FILE_SHARE_READ | FILE_SHARE_WRITE,
+      nullptr,
+      CONSOLE_TEXTMODE_BUFFER,
+      nullptr
+    );
+    if (!hStdout) {
+      write(L"Creating screen buffer failed!");
+      return GetLastError();
+    }
+    SetConsoleActiveScreenBuffer(hStdout);
+    SetConsoleMode(hStdout, ENABLE_PROCESSED_OUTPUT |
+                            ENABLE_WRAP_AT_EOL_OUTPUT |
+                            ENABLE_VIRTUAL_TERMINAL_PROCESSING |
+                            DISABLE_NEWLINE_AUTO_RETURN);
+  } else if (altbuffer == AltBufferVt) {
+    write(L"\x1b[?1049h");
+  }
 
   if (newInMode & ENABLE_PROCESSED_INPUT) {
     SetConsoleCtrlHandler(nullptr, false);
