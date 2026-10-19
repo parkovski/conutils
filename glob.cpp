@@ -105,14 +105,20 @@ bool match(std::wstring_view file, const std::vector<std::wstring> globParts) {
 }
 
 int wmain(int argc, wchar_t *argv[]) {
-  std::wstring dir, absolute;
+  std::wstring dir, printDir, absolute;
   if (argc == 2) {
     dir = getCurDir();
   } else if (argc == 3) {
     dir = argv[2];
+    printDir = dir;
   } else {
     std::cerr << "usage: glob <glob> [<directory>]\n";
     return 1;
+  }
+
+  if (!printDir.empty() &&
+      !printDir.ends_with(L'\\') && !printDir.ends_with(L'/')) {
+    printDir.push_back(L'\\');
   }
 
   if (dir.length() >= 2 && (dir[0] | 0x20) >= L'a' && (dir[0] | 0x20) <= L'z'
@@ -189,6 +195,6 @@ int wmain(int argc, wchar_t *argv[]) {
   }
 
   for (auto const &file : matchFiles) {
-    std::wcout << file << L"\n";
+    std::wcout << printDir << file << L"\n";
   }
 }
