@@ -1,7 +1,8 @@
 param(
   [Parameter(Position = 0, ValueFromRemainingArguments = $true)]
   [string[]]$files,
-  [switch]$force
+  [switch]$force,
+  [switch]$dbg
 )
 
 if (-not $files.Length) {
@@ -28,6 +29,11 @@ foreach ($file in $files) {
       }
     }
   }
-  cl.exe /nologo /EHsc /std:c++20 /O1 /MD /DNDEBUG /GF /GR- /GL $file
+  if ($dbg) {
+    Write-Host "Debug build..."
+    cl.exe /nologo /EHsc /std:c++20 /Od /MDd /Zi /GF /GR- $file
+  } else {
+    cl.exe /nologo /EHsc /std:c++20 /O1 /MD /DNDEBUG /GF /GR- /GL $file
+  }
   Remove-Item ($file -replace '\.cpp$','.obj')
 }
