@@ -2,7 +2,7 @@ param(
   [Parameter(Position = 0, ValueFromRemainingArguments = $true)]
   [string[]]$files,
   [switch]$force,
-  [switch]$dbg
+  [switch]$d # Debug
 )
 
 if (-not $files.Length) {
@@ -29,7 +29,7 @@ foreach ($file in $files) {
       }
     }
   }
-  if ($dbg) {
+  if ($d) {
     Write-Host "Debug build..."
     cl.exe /nologo /EHsc /std:c++20 /Od /MDd /Zi /GF /GR- $file
   } else {
