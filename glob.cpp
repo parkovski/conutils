@@ -318,7 +318,12 @@ struct Matcher {
     MatchResult result;
     for (int i = 0; i < matchResult.matches.size(); ++i) {
       auto attr = GetFileAttributes(matchResult.matches[i].c_str());
-      if (attr & FILE_ATTRIBUTE_DIRECTORY && dirnr <= dirGlobs.size()) {
+      if (dirnr == dirGlobs.size()) {
+        result.matches
+          .emplace_back(std::move(*(matchResult.matches.data() + i)));
+        result.printMatches
+          .emplace_back(std::move(*(matchResult.printMatches.data() + i)));
+      } else if (attr & FILE_ATTRIBUTE_DIRECTORY && dirnr < dirGlobs.size()) {
         auto r = (*this)(
           matchResult.matches[i],
           matchResult.printMatches[i],
@@ -329,11 +334,8 @@ struct Matcher {
           result.printMatches.emplace_back(std::move(*(r.printMatches.data() + j)));
         }
       } else {
-        DEBUG(L"adding " << matchResult.matches[i]);
-        result.matches
-          .emplace_back(std::move(*(matchResult.matches.data() + i)));
-        result.printMatches
-          .emplace_back(std::move(*(matchResult.printMatches.data() + i)));
+        DEBUG(L"Should not be reached!");
+        __assume(0);
       }
     }
 
