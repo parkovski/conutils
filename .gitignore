@@ -3,3 +3,4 @@
 *.pdb
 compile_commands.json
 /.cache/
+/.vscode
