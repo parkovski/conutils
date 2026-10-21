@@ -145,7 +145,11 @@ struct Matcher {
 
         case L'[':
           for (size_t pi = 1; pi < glob[gi].length() - 1; ++pi) {
-            if (glob[gi][pi] == filename[fi]) {
+            wchar_t c1[2] = { glob[gi][pi], 0 };
+            wchar_t c2[2] = { filename[fi], 0 };
+            if (CompareString(
+              LOCALE_INVARIANT, NORM_IGNORECASE, c1, -1, c2, -1
+            ) == CSTR_EQUAL) {
               goto foundChar;
             }
           }
@@ -160,7 +164,10 @@ struct Matcher {
           {
             auto s =
               std::wstring_view{filename}.substr(fi, glob[gi].length());
-            if (s == glob[gi]) {
+            if (CompareString(
+              LOCALE_INVARIANT, NORM_IGNORECASE,
+              glob[gi].c_str(), -1, s.data(), s.length()
+            ) == CSTR_EQUAL) {
               DEBUG(L"found match: " << filename);
               fi += glob[gi].length();
               fi0 = fi - 1;
@@ -217,7 +224,11 @@ struct Matcher {
 
       case L'[':
         for (size_t pi = 1; pi < glob[gi].length() - 1; ++pi) {
-          if (glob[gi][pi] == filename[fi]) {
+          wchar_t c1[2] = { glob[gi][pi], 0 };
+          wchar_t c2[2] = { filename[fi], 0 };
+          if (CompareString(
+            LOCALE_INVARIANT, NORM_IGNORECASE, c1, -1, c2, -1
+          ) == CSTR_EQUAL) {
             goto foundChar;
           }
         }
@@ -230,7 +241,10 @@ struct Matcher {
         {
           auto s =
             std::wstring_view{filename}.substr(fi, glob[gi].length());
-          if (s == glob[gi]) {
+          if (CompareString(
+            LOCALE_INVARIANT, NORM_IGNORECASE,
+            glob[gi].c_str(), -1, s.data(), s.length()
+          ) == CSTR_EQUAL) {
             fi += glob[gi].length();
             break;
           } else {
