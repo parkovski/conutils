@@ -7,6 +7,10 @@ Usage: `glob <glob> [directory]`
 Since Windows shells don't support globbing, this utility provides it for you.
 Currently supported glob features: *, ?, [].
 
+## touch - You know what this is
+
+PowerShell doesn't have a built-in touch command so I made one.
+
 ## isvt - Windows console mode utility
 
 A simple tool to report and change console modes for any accessible process.
