@@ -1,5 +1,12 @@
 # Windows Console Utilities
 
+## glob - Shell glob for Windows
+
+Usage: `glob <glob> [directory]`
+
+Since Windows shells don't support globbing, this utility provides it for you.
+Currently supported glob features: *, ?, [].
+
 ## isvt - Windows console mode utility
 
 A simple tool to report and change console modes for any accessible process.
@@ -15,12 +22,13 @@ Supported arguments:
 
 Using the `i/o=` option, names and values can be combined - see help for details.
 
-## hresult - Print an hresult value.
+## syserr - Print a system error description.
 
-Usage: `hresult [-w] <result code>`.
+Usage: `syserr <result code>`.
 
-Looks up the result code as an `NTSTATUS`. If `-w` is passed, it is tried as
-an `HRESULT` (DOS error).
+Looks up the result code and prints a description of it according to the
+operating system's message formatting function. This program works on Windows
+and Linux/Unix.
 
 ## conevents - Print console events.
 
@@ -62,6 +70,13 @@ Using `-p` causes `y`/`n` to be printed, otherwise the program returns 0 for
 yes and 1 for no.
 
 Also builds on Unix platforms.
+
+## readreparse - Read a Windows reparse point.
+
+Usage: `readreparse <file>`
+
+Supported reparse point types are: mount point, symbolic link, and app exec
+link.
 
 ## Scripts
 
