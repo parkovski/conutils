@@ -133,6 +133,7 @@ struct Matcher {
           globParts.emplace_back(glob.substr(j, 2));
           i = ++j + 1;
         }
+        break;
 
       case '/':
       case '\\':
@@ -228,8 +229,8 @@ struct Matcher {
                 || glob[gi][1] == '{' || glob[gi][1] == '}'
                 || glob[gi][1] == '`')) {
             if (filename[fi] == glob[gi][1]) {
-              fi0 = fi + 1;
-              fi += 2;
+              fi0 = fi;
+              ++fi;
               break;
             } else {
               goto tryAgain;
@@ -312,6 +313,7 @@ struct Matcher {
         return false;
 
       foundChar:
+        ++fi;
         break;
 
       case L'{':
@@ -353,7 +355,7 @@ struct Matcher {
               || glob[gi][1] == '{' || glob[gi][1] == '}'
               || glob[gi][1] == '`')) {
           if (filename[fi] == glob[gi][1]) {
-            fi += 2;
+            ++fi;
             break;
           } else {
             return false;
@@ -471,9 +473,6 @@ struct Matcher {
           result.matches.emplace_back(std::move(*(r.matches.data() + j)));
           result.printMatches.emplace_back(std::move(*(r.printMatches.data() + j)));
         }
-      } else {
-        DEBUG(L"Should not be reached!");
-        __assume(0);
       }
     }
 
@@ -540,6 +539,15 @@ int wmain(int argc, wchar_t *argv[]) {
   Matcher matcher{std::move(absolute)};
   try {
     matcher.parse(argv[1]);
+#ifndef NDEBUG
+    std::wcout << L"parts:\n";
+    for (int i = 0; i <= matcher.dirGlobs.size(); ++i) {
+      for (int j = 0; j < matcher.getGlob(i).size(); ++j) {
+        std::wcout << "  " << matcher.getGlob(i)[j] << L"\n";
+      }
+    }
+    std::wcout << L"\n";
+#endif
     auto r = matcher(baseDir, printDir);
     DEBUG(L"\n\n");
     for (int i = 0; i < r.printMatches.size(); ++i) {
