@@ -47,12 +47,6 @@ Press Ctrl-C twice to exit.
 
 Usage: `darkmode`.
 
-## resize - Send a resize event to a console.
-
-Usage: `resize <pid>`.
-
-Might not work.
-
 ## scrollhook - Horizontal scroll toggle.
 
 Usage: `scrollhook [-d]`.
