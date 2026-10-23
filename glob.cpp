@@ -192,7 +192,7 @@ struct Matcher {
           {
             size_t pi0 = 1, pi = 1;
             while (true) {
-              if (pi0 == glob[gi].length()) {
+              if (pi == glob[gi].length()) {
                 goto tryAgain;
               }
               for (; pi < glob[gi].length(); ++pi) {
@@ -378,7 +378,7 @@ struct Matcher {
       }
     }
 
-    return true;
+    return fi == filename.length();
   }
 
   struct MatchResult {
