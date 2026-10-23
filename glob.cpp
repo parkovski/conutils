@@ -37,6 +37,10 @@ void goUp(std::wstring &path) {
     }
   } else if (backslash == std::wstring::npos) {
     path.erase(slash + 1);
+  } else if (backslash > slash) {
+    path.erase(backslash + 1);
+  } else {
+    path.erase(slash + 1);
   }
 }
 
