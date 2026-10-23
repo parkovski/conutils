@@ -5,7 +5,7 @@
 Usage: `glob <glob> [directory]`
 
 Since Windows shells don't support globbing, this utility provides it for you.
-Currently supported glob features: *, ?, [].
+Currently supported glob features: *, ?, [], {}.
 
 ## touch - You know what this is
 

@@ -106,6 +106,34 @@ struct Matcher {
         i = j + 1;
         break;
 
+      case '{':
+        if (i != j) {
+          globParts.emplace_back(glob.substr(i, j - i));
+        }
+        i = j;
+        while (++j < glob.length() && glob[j] != '}') {
+        }
+        if (j == glob.length()) {
+          throw std::exception{"missing '}'"};
+        }
+        DEBUG("parsed " << glob.substr(i, j - i + 1));
+        globParts.emplace_back(glob.substr(i, j - i + 1));
+        i = j + 1;
+        break;
+
+      case '`':
+        if (i != j) {
+          globParts.emplace_back(glob.substr(i, j - i));
+        }
+        if (j + 1 < glob.length()
+            && (glob[j + 1] == '*' || glob[j + 1] == '?'
+              || glob[j + 1] == '[' || glob[j + 1] == ']'
+              || glob[j + 1] == '{' || glob[j + 1] == '}'
+              || glob[i + 1] == '`')) {
+          globParts.emplace_back(glob.substr(j, 2));
+          i = ++j + 1;
+        }
+
       case '/':
       case '\\':
         if (i != j) {
@@ -159,6 +187,55 @@ struct Matcher {
           fi0 = fi;
           ++fi;
           break;
+
+        case L'{':
+          {
+            size_t pi0 = 1, pi = 1;
+            while (true) {
+              if (pi0 == glob[gi].length()) {
+                goto tryAgain;
+              }
+              for (; pi < glob[gi].length(); ++pi) {
+                if (glob[gi][pi] == L',' || glob[gi][pi] == L'}') {
+                  break;
+                }
+              }
+              if (pi == pi0) {
+                break;
+              }
+              if (filename.length() - fi >= pi - pi0) {
+                auto s =
+                  std::wstring_view{filename}.substr(fi, pi - pi0);
+                if (CompareString(
+                  LOCALE_INVARIANT, NORM_IGNORECASE,
+                  glob[gi].c_str() + pi0, pi - pi0, s.data(), s.length()
+                ) == CSTR_EQUAL) {
+                  DEBUG(L"In *{}: found match: " << filename);
+                  fi += pi - pi0;
+                  fi0 = fi - 1;
+                  break;
+                }
+              }
+              pi0 = ++pi;
+            }
+          }
+          break;
+
+        case '`':
+          if (glob[gi].length() > 1
+              && (glob[gi][1] == '*' || glob[gi][1] == '?'
+                || glob[gi][1] == '[' || glob[gi][1] == ']'
+                || glob[gi][1] == '{' || glob[gi][1] == '}'
+                || glob[gi][1] == '`')) {
+            if (filename[fi] == glob[gi][1]) {
+              fi0 = fi + 1;
+              fi += 2;
+              break;
+            } else {
+              goto tryAgain;
+            }
+          }
+          [[fallthrough]];
 
         default:
           {
@@ -236,6 +313,53 @@ struct Matcher {
 
       foundChar:
         break;
+
+      case L'{':
+        {
+          size_t pi0 = 1, pi = 1;
+          while (true) {
+            if (pi0 == glob[gi].length()) {
+              return false;
+            }
+            for (; pi < glob[gi].length(); ++pi) {
+              if (glob[gi][pi] == L',' || glob[gi][pi] == L'}') {
+                break;
+              }
+            }
+            if (pi == pi0) {
+              break;
+            }
+            if (filename.length() - fi >= pi - pi0) {
+              auto s =
+                std::wstring_view{filename}.substr(fi, pi - pi0);
+              if (CompareString(
+                LOCALE_INVARIANT, NORM_IGNORECASE,
+                glob[gi].c_str() + pi0, pi - pi0, s.data(), s.length()
+              ) == CSTR_EQUAL) {
+                DEBUG(L"found match: " << filename);
+                fi += pi - pi0;
+                break;
+              }
+            }
+            pi0 = ++pi;
+          }
+        }
+        break;
+
+      case '`':
+        if (glob[gi].length() > 1
+            && (glob[gi][1] == '*' || glob[gi][1] == '?'
+              || glob[gi][1] == '[' || glob[gi][1] == ']'
+              || glob[gi][1] == '{' || glob[gi][1] == '}'
+              || glob[gi][1] == '`')) {
+          if (filename[fi] == glob[gi][1]) {
+            fi += 2;
+            break;
+          } else {
+            return false;
+          }
+        }
+        [[fallthrough]];
 
       default:
         {
