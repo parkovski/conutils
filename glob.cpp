@@ -14,6 +14,8 @@
 #define DEBUG(x)
 #endif
 
+wchar_t preferredSlash = L'\\';
+
 std::wstring getCurDir() {
   std::wstring dir;
   auto length = GetCurrentDirectory(0, nullptr);
@@ -45,15 +47,8 @@ void goUp(std::wstring &path) {
 }
 
 struct Matcher {
-  std::wstring baseDir;
   std::vector<std::wstring> globParts;
   std::vector<std::vector<std::wstring>> dirGlobs;
-  std::vector<std::wstring> searchDirs;
-  std::vector<std::wstring> files;
-
-  Matcher(std::wstring baseDir)
-    : baseDir{std::move(baseDir)}
-  {}
 
   std::vector<std::wstring> &getGlob(int n) {
     if (n == dirGlobs.size()) {
@@ -321,10 +316,11 @@ struct Matcher {
         break;
 
       case L'{':
+        DEBUG(L"{}");
         {
           size_t pi0 = 1, pi = 1;
           while (true) {
-            if (pi0 == glob[gi].length()) {
+            if (pi == glob[gi].length()) {
               return false;
             }
             for (; pi < glob[gi].length(); ++pi) {
@@ -332,6 +328,7 @@ struct Matcher {
                 break;
               }
             }
+            DEBUG(L"part: " << glob[gi].substr(pi0, pi - pi0));
             if (pi == pi0) {
               break;
             }
@@ -342,7 +339,7 @@ struct Matcher {
                 LOCALE_INVARIANT, NORM_IGNORECASE,
                 glob[gi].c_str() + pi0, pi - pi0, s.data(), s.length()
               ) == CSTR_EQUAL) {
-                DEBUG(L"found match: " << filename);
+                DEBUG(L"In {}: found match: " << filename);
                 fi += pi - pi0;
                 break;
               }
@@ -378,6 +375,7 @@ struct Matcher {
             fi += glob[gi].length();
             break;
           } else {
+            DEBUG(glob[gi] << L" != " << s);
             return false;
           }
         }
@@ -407,7 +405,7 @@ struct Matcher {
     }
     if (!baseDirPrint.empty()
         && !baseDirPrint.ends_with(L'\\') && !baseDirPrint.ends_with('/')) {
-      baseDirPrint.push_back(L'\\');
+      baseDirPrint.push_back(preferredSlash);
     }
 
     DEBUG(L"baseDir = " << baseDir << L", baseDirPrint = " << baseDirPrint);
@@ -420,11 +418,13 @@ struct Matcher {
 
     auto const &glob = getGlob(dirnr);
     if (glob.size() == 1 && glob[0] == L".") {
-      baseDirPrint.append(L".\\");
+      wchar_t dotSlash[] = { L'.', preferredSlash, '\0' };
+      baseDirPrint.append(dotSlash);
       return match(baseDir, baseDirPrint, ++dirnr);
     } else if (glob.size() == 1 && glob[0] == L"..") {
+      wchar_t dotDotSlash[] = { L'.', L'.', preferredSlash, '\0' };
       goUp(baseDir);
-      baseDirPrint.append(L"..\\");
+      baseDirPrint.append(dotDotSlash);
       return match(baseDir, baseDirPrint, ++dirnr);
     }
 
@@ -485,7 +485,7 @@ struct Matcher {
 };
 
 int wmain(int argc, wchar_t *argv[]) {
-  std::wstring baseDir, printDir, absolute;
+  std::wstring baseDir, printDir;
   if (argc == 2) {
     baseDir = getCurDir();
   } else if (argc == 3) {
@@ -494,6 +494,20 @@ int wmain(int argc, wchar_t *argv[]) {
   } else {
     std::cerr << "usage: glob <glob> [<directory>]\n";
     return 1;
+  }
+
+  int slashes = 0, backslashes = 0;
+  for (int i = 1; i < argc; ++i) {
+    for (int j = 0; argv[i][j]; ++j) {
+      if (argv[i][j] == L'/') {
+        ++slashes;
+      } else if (argv[i][j] == L'\\') {
+        ++backslashes;
+      }
+    }
+  }
+  if (slashes > backslashes) {
+    preferredSlash = '/';
   }
 
   if (baseDir.length() >= 2 && (baseDir[0] | 0x20) >= L'a' && (baseDir[0] | 0x20) <= L'z'
@@ -509,13 +523,9 @@ int wmain(int argc, wchar_t *argv[]) {
     baseDir = std::move(tmp);
   }
 
-  auto do_segment = [](std::wstring_view segment, std::wstring &absolute) {
-    if (segment == L".") {
-    } else if (segment == L"..") {
-      goUp(absolute);
-    } else {
-      absolute.append(segment);
-      absolute.push_back(L'\\');
+  auto do_segment = [](std::wstring_view segment, std::wstring &baseDir) {
+    if (segment == L"..") {
+      goUp(baseDir);
     }
   };
 
@@ -527,20 +537,20 @@ int wmain(int argc, wchar_t *argv[]) {
         continue;
       }
       auto segment = std::wstring_view{&baseDir[i], j - i};
-      do_segment(segment, absolute);
+      do_segment(segment, baseDir);
       i = j + 1;
     }
   }
   if (j > i) {
-    do_segment(std::wstring_view{&baseDir[i], j - i}, absolute);
+    do_segment(std::wstring_view{&baseDir[i], j - i}, baseDir);
   }
 
   if (!printDir.empty() &&
       !printDir.ends_with(L'\\') && !printDir.ends_with(L'/')) {
-    printDir.push_back(L'\\');
+    printDir.push_back(preferredSlash);
   }
 
-  Matcher matcher{std::move(absolute)};
+  Matcher matcher;
   try {
     matcher.parse(argv[1]);
 #ifndef NDEBUG
