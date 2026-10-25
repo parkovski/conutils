@@ -11,7 +11,7 @@
 #ifndef NDEBUG
 #define DEBUG(x) std::wcout << x << L"\n"
 #else
-#define DEBUG(x)
+#define DEBUG(x) ((void)0)
 #endif
 
 wchar_t preferredSlash = L'\\';
@@ -49,6 +49,11 @@ void goUp(std::wstring &path) {
 struct Matcher {
   std::vector<std::wstring> globParts;
   std::vector<std::vector<std::wstring>> dirGlobs;
+
+  void clear() {
+    globParts.clear();
+    dirGlobs.clear();
+  }
 
   std::vector<std::wstring> &getGlob(int n) {
     if (n == dirGlobs.size()) {
@@ -388,6 +393,15 @@ struct Matcher {
   struct MatchResult {
     std::vector<std::wstring> matches;
     std::vector<std::wstring> printMatches;
+
+    void merge(const MatchResult &result) {
+      for (auto const &match : result.matches) {
+        matches.emplace_back(match);
+      }
+      for (auto const &printMatch : result.printMatches) {
+        printMatches.emplace_back(printMatch);
+      }
+    }
   };
 
   MatchResult match(std::wstring &baseDir,
@@ -418,11 +432,11 @@ struct Matcher {
 
     auto const &glob = getGlob(dirnr);
     if (glob.size() == 1 && glob[0] == L".") {
-      wchar_t dotSlash[] = { L'.', preferredSlash, '\0' };
+      wchar_t dotSlash[] = { L'.', preferredSlash, L'\0' };
       baseDirPrint.append(dotSlash);
       return match(baseDir, baseDirPrint, ++dirnr);
     } else if (glob.size() == 1 && glob[0] == L"..") {
-      wchar_t dotDotSlash[] = { L'.', L'.', preferredSlash, '\0' };
+      wchar_t dotDotSlash[] = { L'.', L'.', preferredSlash, L'\0' };
       goUp(baseDir);
       baseDirPrint.append(dotDotSlash);
       return match(baseDir, baseDirPrint, ++dirnr);
@@ -485,16 +499,13 @@ struct Matcher {
 };
 
 int wmain(int argc, wchar_t *argv[]) {
-  std::wstring baseDir, printDir;
-  if (argc == 2) {
-    baseDir = getCurDir();
-  } else if (argc == 3) {
-    baseDir = argv[2];
-    printDir = baseDir;
-  } else {
-    std::cerr << "usage: glob <glob> [<directory>]\n";
+  std::wstring curDir, baseDir, printDir;
+  if (argc == 1) {
+    std::cerr << "usage: glob <glob...>\n";
     return 1;
   }
+
+  curDir = getCurDir();
 
   int slashes = 0, backslashes = 0;
   for (int i = 1; i < argc; ++i) {
@@ -510,62 +521,29 @@ int wmain(int argc, wchar_t *argv[]) {
     preferredSlash = '/';
   }
 
-  if (baseDir.length() >= 2 && (baseDir[0] | 0x20) >= L'a' && (baseDir[0] | 0x20) <= L'z'
-      && baseDir[1] == L':') {
-    //
-  } else if (baseDir[0] == L'\\' || baseDir[0] == L'/') {
-    auto curdir = getCurDir();
-    baseDir = curdir.substr(0, 2) + baseDir;
-  } else {
-    std::wstring tmp = getCurDir();
-    tmp.push_back(L'\\');
-    tmp.append(baseDir);
-    baseDir = std::move(tmp);
-  }
-
-  auto do_segment = [](std::wstring_view segment, std::wstring &baseDir) {
-    if (segment == L"..") {
-      goUp(baseDir);
-    }
-  };
-
-  size_t i = 0, j = 0;
-  for (; j < baseDir.length(); ++j) {
-    if (baseDir[j] == '\\' || baseDir[j] == '/') {
-      if (i == j) {
-        i = j + 1;
-        continue;
-      }
-      auto segment = std::wstring_view{&baseDir[i], j - i};
-      do_segment(segment, baseDir);
-      i = j + 1;
-    }
-  }
-  if (j > i) {
-    do_segment(std::wstring_view{&baseDir[i], j - i}, baseDir);
-  }
-
-  if (!printDir.empty() &&
-      !printDir.ends_with(L'\\') && !printDir.ends_with(L'/')) {
-    printDir.push_back(preferredSlash);
-  }
-
   Matcher matcher;
+  Matcher::MatchResult result;
   try {
-    matcher.parse(argv[1]);
+    for (int i = 1; i < argc; ++i) {
+      matcher.clear();
+      matcher.parse(argv[i]);
 #ifndef NDEBUG
-    std::wcout << L"parts:\n";
-    for (int i = 0; i <= matcher.dirGlobs.size(); ++i) {
-      for (int j = 0; j < matcher.getGlob(i).size(); ++j) {
-        std::wcout << "  " << matcher.getGlob(i)[j] << L"\n";
+      std::wcout << L"parts:\n";
+      for (int i = 0; i <= matcher.dirGlobs.size(); ++i) {
+        for (int j = 0; j < matcher.getGlob(i).size(); ++j) {
+          std::wcout << "  " << matcher.getGlob(i)[j] << L"\n";
+        }
       }
-    }
-    std::wcout << L"\n";
+      std::wcout << L"\n";
 #endif
-    auto r = matcher(baseDir, printDir);
+      baseDir = curDir;
+      printDir.clear();
+      auto r = matcher(baseDir, printDir);
+      result.merge(r);
+    }
     DEBUG(L"\n\n");
-    for (int i = 0; i < r.printMatches.size(); ++i) {
-      std::wcout << r.printMatches[i] << L"\n";
+    for (int i = 0; i < result.printMatches.size(); ++i) {
+      std::wcout << result.printMatches[i] << L"\n";
     }
   } catch (std::exception &e) {
     std::cout << e.what() << "\n";
