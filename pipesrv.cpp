@@ -202,15 +202,15 @@ static void runServer(const std::wstring &pipeName) {
           std::unique_lock lock{mutex};
           DWORD bytesWritten;
           WriteFile(pipe, "ok", 3, &bytesWritten, nullptr);
-          for (auto client : clients) {
-            if (client == pipe) {
+          for (int i = 0; i < clients.size(); ++i) {
+            if (clients[i] == pipe) {
               continue;
             }
-            if (!WriteFile(client, message, bytesRead, &bytesWritten, nullptr)
-                || bytesWritten != bytesRead) {
-              std::wcerr << L"WriteFile failed!\n";
-              closePipe(lock);
-              return;
+            if (!WriteFile(clients[i], message, bytesRead, &bytesWritten,
+                           nullptr)) {
+              std::wcerr << L"WriteFile failed; erasing client.\n";
+              clients.erase(clients.begin() + i);
+              --i;
             }
           }
         }
