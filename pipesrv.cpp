@@ -135,7 +135,7 @@ static void runServer(const std::wstring &pipeName) {
         clients.erase(it);
       };
 
-      char message[PipeBufferSize];
+      char message[PipeBufferSize + 1];
       bool addedToClients = false;
       while (true) {
         {
@@ -146,7 +146,8 @@ static void runServer(const std::wstring &pipeName) {
         }
 
         DWORD bytesRead;
-        if (!ReadFile(pipe, message, sizeof(message), &bytesRead, nullptr)) {
+        if (!ReadFile(pipe, message, sizeof(message) - 1, &bytesRead,
+                      nullptr)) {
           if (GetLastError() == ERROR_BROKEN_PIPE) {
             std::unique_lock lock{mutex};
             closePipe(lock);
@@ -159,6 +160,7 @@ static void runServer(const std::wstring &pipeName) {
             return;
           }
         }
+        message[bytesRead] = 0;
         std::cout << "Received message: " << message << ".\n";
 
         if (std::string_view{message} == "wait") {
@@ -176,12 +178,12 @@ static void runServer(const std::wstring &pipeName) {
           }
           exitFlag = true;
           DWORD bytes;
-          WriteFile(pipe, "exit", 5, &bytes, nullptr);
+          WriteFile(pipe, "exit", 4, &bytes, nullptr);
           for (auto client : clients) {
             if (pipe == client) {
               continue;
             }
-            WriteFile(client, "exit", 5, &bytes, nullptr);
+            WriteFile(client, "exit", 4, &bytes, nullptr);
             DisconnectNamedPipe(client);
             CloseHandle(client);
           }
@@ -195,13 +197,13 @@ static void runServer(const std::wstring &pipeName) {
           if (newPipe == INVALID_HANDLE_VALUE) {
             return;
           }
-          WriteFile(newPipe, "exit", 5, &bytes, nullptr);
+          WriteFile(newPipe, "exit", 4, &bytes, nullptr);
           CloseHandle(newPipe);
           return;
         } else {
           std::unique_lock lock{mutex};
           DWORD bytesWritten;
-          WriteFile(pipe, "ok", 3, &bytesWritten, nullptr);
+          WriteFile(pipe, "ok", 2, &bytesWritten, nullptr);
           for (int i = 0; i < clients.size(); ++i) {
             if (clients[i] == pipe) {
               continue;
@@ -251,7 +253,7 @@ static void sendMessage(const std::wstring &pipeName,
   }
 
   DWORD bytesWritten;
-  if (!WriteFile(pipe, message, strlen(message) + 1, &bytesWritten,
+  if (!WriteFile(pipe, message, strlen(message), &bytesWritten,
                  nullptr)) {
     CloseHandle(pipe);
     std::wcerr << L"Writing to pipe failed!\n";
@@ -259,12 +261,13 @@ static void sendMessage(const std::wstring &pipeName,
   }
 
   DWORD bytesRead;
-  char buffer[PipeBufferSize];
+  char buffer[PipeBufferSize + 1];
   if (!ReadFile(pipe, buffer, PipeBufferSize, &bytesRead, nullptr)) {
     CloseHandle(pipe);
     std::wcerr << L"Error reading response from server!\n";
     return;
   }
+  std::cout << "Server returned: " << buffer << ".\n";
   CloseHandle(pipe);
 }
 
@@ -298,19 +301,20 @@ static void waitForMessages(const std::wstring &pipeName) {
   }
 
   DWORD bytes;
-  if (!WriteFile(pipe, "wait", 5, &bytes, nullptr)) {
+  if (!WriteFile(pipe, "wait", 4, &bytes, nullptr)) {
     CloseHandle(pipe);
     std::wcerr << L"Writing to pipe failed!\n";
     return;
   }
 
-  char message[PipeBufferSize];
+  char message[PipeBufferSize + 1];
   while (true) {
     if (!ReadFile(pipe, message, PipeBufferSize, &bytes, nullptr)) {
       CloseHandle(pipe);
       std::wcerr << L"Reading from pipe failed!\n";
       return;
     }
+    message[bytes] = 0;
     std::cout << "Received message: " << message << ".\n";
     if (std::string_view{message} == "exit") {
       CloseHandle(pipe);
