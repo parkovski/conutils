@@ -267,6 +267,7 @@ static void sendMessage(const std::wstring &pipeName,
     std::wcerr << L"Error reading response from server!\n";
     return;
   }
+  buffer[bytesRead] = 0;
   std::cout << "Server returned: " << buffer << ".\n";
   CloseHandle(pipe);
 }
