@@ -66,6 +66,7 @@ int wmain(int argc, wchar_t *argv[]) {
     WideCharToMultiByte(CP_UTF8, 0, message.c_str(), -1, m, length, nullptr,
                          nullptr);
     sendMessage(pipeName, m);
+    delete[] m;
   }
 
   return 0;
