@@ -2,7 +2,7 @@
 
 ## glob - Shell glob for Windows
 
-Usage: `glob <glob> [directory]`
+Usage: `glob <globs...>`
 
 Since Windows shells don't support globbing, this utility provides it for you.
 Currently supported glob features: *, ?, [], {}.
@@ -75,6 +75,13 @@ Usage: `readreparse <file>`
 
 Supported reparse point types are: mount point, symbolic link, and app exec
 link.
+
+## pipesrv - Communicate over named pipes.
+
+Usage: `pipesrv [-w|-s] [pipe_name] [message]`
+
+Use `-s` to run a server, `-w` to wait for messages, and no flags to send a
+message. Messages are broadcast to all waiters.
 
 ## Scripts
 
